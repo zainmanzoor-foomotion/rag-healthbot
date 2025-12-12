@@ -55,7 +55,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
         }
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
 
         const summaries: ReportSummary[] = [];
 

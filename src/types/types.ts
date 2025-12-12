@@ -12,3 +12,16 @@ export interface UploadedFile {
     file: File;
     preview: string | null;
 }
+
+
+export interface Message {
+  userContent: string;
+  aiContent: string;
+  loading?: boolean;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+}

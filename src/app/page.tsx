@@ -4,6 +4,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import ReportModal from "@/modals/ReportModal";
 import { ReportSummary, UploadedFile } from "@/types/types";
+import Link from 'next/link';
 
 
 // Icon Placeholders (Using inline SVGs for professional appearance)
