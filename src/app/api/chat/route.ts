@@ -1,43 +1,62 @@
-import { streamText } from "ai";
+// import { streamText } from "ai";
 import { google } from "@ai-sdk/google";
 import Chat from "@/schemas/Coversation";
 import { connectDB } from "@/helpers/mongodb";
 
+
+import { convertToModelMessages, streamText, UIMessage } from 'ai';
+
+// Allow streaming responses up to 30 seconds
+export const maxDuration = 30;
+
 export async function POST(req: Request) {
-    try {
-        await connectDB();
+    await connectDB()
+    const {
+        messages,
+        id: chatId,
+    }: {
+        messages: UIMessage[];
+        id: string;
+    } = await req.json();
 
-        const body = await req.json();
-        const { chatId, messages } = body;
+    // 1️⃣ Get last user message
+    const lastUserMessage = messages
+        .filter((m) => m.role === "user")
+        .at(-1);
 
-        const { userContent } = messages
+    const userContent =
+        lastUserMessage?.parts
+            ?.filter((p) => p.type === "text")
+            .map((p) => p.text)
+            .join(" ") ?? "";
 
-        if (!chatId || !userContent) {
-            return new Response(
-                JSON.stringify({ error: "chatId or userContent required" }),
-                { status: 400 }
+    // 2️⃣ Start streaming AI response
+    const result = streamText({
+        model: google("gemini-2.5-flash"),
+        system: "You are a helpful assistant.",
+        messages: convertToModelMessages(messages),
+        async onFinish({ text }) {
+            // 3️⃣ Full AI text is available here
+            const aiContent = text;
+
+            // 4️⃣ Update chat document where _id === chatId
+            await Chat.findByIdAndUpdate(
+                chatId,
+                {
+                    $push: {
+                        messages: {
+                            userContent,
+                            aiContent,
+                            createdAt: new Date(),
+                        },
+                    },
+                },
+                { new: true }
             );
-        }
+        },
+    });
 
-        // ✅ Await the result!
-        const result = await streamText({
-            model: google("gemini-2.5-flash-lite"),
-            messages: [{ role: "user", content: userContent }],
-        });
-
-        // Now you can safely access full AI text
-        const aiContent = await result.text; // <-- await here
-
-        // Save to DB
-        const updatedChat = await Chat.findByIdAndUpdate(
-            chatId,
-            { $push: { messages: { userContent, aiContent } } },
-            { new: true }
-        );
-
-        return new Response(JSON.stringify(updatedChat), { status: 200 });
-    } catch (err) {
-        console.error("Chat API Error:", err);
-        return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500 });
-    }
+    // 5️⃣ Return stream response to frontend
+    return result.toUIMessageStreamResponse();
 }
+

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Conversation } from '@/types/types';
+import MessageLoader from './MessageLoader';
 
 interface SidebarProps {
     conversations: Conversation[];
@@ -8,6 +9,7 @@ interface SidebarProps {
     setCurrentChatId: (id: string) => void;
     startNewChat: () => void;
     onDeleteConversation: (id: string) => void;
+    conversationLoading: boolean
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -16,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     setCurrentChatId,
     startNewChat,
     onDeleteConversation,
+    conversationLoading
 }) => {
     const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
 
@@ -34,7 +37,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="flex-grow space-y-2 overflow-y-auto custom-scrollbar">
-                {conversations.map((chat,index) => (
+
+                {conversations.map((chat, index) => (
                     <div
                         key={chat.id || index}
                         onClick={() => setCurrentChatId(chat.id)}
@@ -56,7 +60,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </button>
                     </div>
                 ))}
-                {conversations.length === 0 && <p className="text-gray-500 text-sm p-2">No conversations found.</p>}
+                {conversations.length === 0 && conversationLoading &&
+                    <div className='flex items-center justify-center'>
+                        <MessageLoader />
+                    </div>}
             </div>
         </aside>
     );
