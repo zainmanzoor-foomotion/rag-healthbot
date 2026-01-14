@@ -6,6 +6,7 @@ export interface IReport extends Document {
     filename: string;
     summary: string;
     medications: Medication[];
+    extractedText?: string;
 }
 
 const MedicationsSchema = new Schema<Medication>({
@@ -17,6 +18,7 @@ const ReportSchema = new Schema<IReport>({
     filename: { type: String, required: true },
     summary: { type: String, required: true },
     medications: { type: [MedicationsSchema], default: [] },
+    extractedText: { type: String, required: false },
 },
     { timestamps: true }
 )

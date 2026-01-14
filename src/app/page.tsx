@@ -107,7 +107,8 @@ const DocumentUpload: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex justify-center items-center p-4">
+    <div className="min-h-screen bg-gray-50 flex justify-center items-center p-4 relative">
+    
       <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-lg transition-all duration-300">
         <h1 className="text-3xl font-extrabold text-gray-800 mb-2 text-center">
           Document Submission Portal

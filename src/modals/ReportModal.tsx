@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ReportSummary } from "@/types/types";
-
+import { useRouter } from "next/navigation";
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -10,6 +10,8 @@ interface ModalProps {
 
 const ReportModal: React.FC<ModalProps> = ({ open, onClose, contents }) => {
   const [currentPage, setCurrentPage] = useState(0);
+  const [isCreating, setIsCreating] = useState(false);
+  const router = useRouter();
 
   if (!open || contents.length === 0) return null;
 
@@ -29,6 +31,7 @@ const ReportModal: React.FC<ModalProps> = ({ open, onClose, contents }) => {
             ✕
           </button>
         </div>
+
 
         {/* Body */}
         <div className="p-6 flex-grow overflow-y-auto space-y-6">
@@ -52,35 +55,74 @@ const ReportModal: React.FC<ModalProps> = ({ open, onClose, contents }) => {
         </div>
 
         {/* Footer / Pagination */}
-        {total > 1 && (
-          <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center">
-            <button
-              onClick={prev}
-              disabled={currentPage === 0}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === 0
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
-                }`}
-            >
-              ← Previous
-            </button>
+        <div className="border-t border-gray-200">
+          {total > 1 && (
+            <div className="px-4 py-3 flex justify-between items-center border-b border-gray-200">
+              <button
+                onClick={prev}
+                disabled={currentPage === 0}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === 0
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  }`}
+              >
+                ← Previous
+              </button>
 
-            <span className="text-sm text-gray-600">
-              {currentPage + 1} of {total}
-            </span>
+              <span className="text-sm text-gray-600">
+                {currentPage + 1} of {total}
+              </span>
 
+              <button
+                onClick={next}
+                disabled={currentPage === total - 1}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === total - 1
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  }`}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+          
+          {/* Chat Button */}
+          <div className="px-4 py-4">
             <button
-              onClick={next}
-              disabled={currentPage === total - 1}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${currentPage === total - 1
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
-                }`}
+              onClick={async () => {
+                if (!current.reportId) return;
+                setIsCreating(true);
+                try {
+                  const res = await fetch("/api/conversations/from-report", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reportId: current.reportId }),
+                  });
+                  if (!res.ok) throw new Error("Failed to create chat");
+                  const data = await res.json();
+                  onClose();
+                  router.push(`/chat?id=${data.id}`);
+                } catch (e) {
+                  // Optionally show a toast
+                  console.error(e);
+                } finally {
+                  setIsCreating(false);
+                }
+              }}
+              disabled={isCreating}
+              className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-indigo-700 hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              Next →
+              {isCreating ? "Preparing chat…" : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Chat About Your Reports
+                </>
+              )}
             </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

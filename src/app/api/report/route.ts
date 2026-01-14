@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
+
 import { connectDB } from "@/helpers/mongodb";
 import Report from "@/schemas/Report";
 import { ReportSummary } from "@/types/types";
@@ -14,12 +15,13 @@ const MedicationSchema = z.object({
 const ReportSchema = z.object({
     summary: z.string(),
     medications: z.array(MedicationSchema).optional(),
+    extractedText: z.string().optional(),
 });
 
 type Report = z.infer<typeof ReportSchema>;
 
 
-async function saveToDatabase({ filename, summary, medications }: ReportSummary) {
+async function saveToDatabase({ filename, summary, medications, extractedText }: ReportSummary & { extractedText?: string }) {
     try {
         await connectDB();
 
@@ -35,6 +37,7 @@ async function saveToDatabase({ filename, summary, medications }: ReportSummary)
             filename,
             summary,
             medications,
+            extractedText,
         });
 
         return report;
@@ -59,7 +62,8 @@ export async function POST(req: Request) {
 
         const summaries: ReportSummary[] = [];
 
-        for (const file of files) {
+
+                for (const file of files) {
             const arrayBuffer = await file.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const base64 = buffer.toString("base64");
@@ -80,7 +84,8 @@ Return a JSON object (not HTML or markdown) summarizing the medical report from 
   "medications": [
     { "name": "<medication name>", "purpose": "<the medication’s purpose / explanation>" }
     ...
-  ]
+    ],
+    "extractedText": "<plain-text extracted content from the report suitable for later Q&A; omit PHI if present; keep within ~12000 characters>"
 }
 
 Do NOT include any other fields (e.g. dosage, diagnosis, lifestyle advice, signature, etc.).
@@ -98,7 +103,7 @@ Do NOT include any other fields (e.g. dosage, diagnosis, lifestyle advice, signa
             }
             raw = raw.trim();
 
-            let reportData: { summary: string; medications?: { name: string, purpose: string }[] };
+            let reportData: { summary: string; medications?: { name: string, purpose: string }[]; extractedText?: string };
 
             // Try to parse and validate JSON
             try {
@@ -117,16 +122,24 @@ Do NOT include any other fields (e.g. dosage, diagnosis, lifestyle advice, signa
                 reportData = { summary: raw };
             }
 
-            // Now push to summaries
-            summaries.push({ filename: file.name, summary: reportData.summary, medications: reportData.medications! });
-            if (reportData.medications!.length > 0) {
-                const report = await saveToDatabase({
-                    filename: file.name,
-                    summary: reportData.summary,
-                    medications: reportData.medications!,
-                });
-                console.log(report)
-            }
+            const meds = reportData.medications ?? [];
+            const extractedText = reportData.extractedText ?? "";
+
+            // Persist report so we always have a reportId for chat/embeddings
+            const report = await saveToDatabase({
+                filename: file.name,
+                summary: reportData.summary,
+                medications: meds,
+                extractedText,
+            });
+
+            // Now push to summaries (includes reportId so the modal can create chat/embeddings)
+            summaries.push({
+                reportId: report._id.toString(),
+                filename: file.name,
+                summary: reportData.summary,
+                medications: meds,
+            });
         }
 
         return NextResponse.json({ summaries });

@@ -9,6 +9,7 @@ export interface IMessage {
 export interface IConversation extends Document {
   title: string;
   messages: IMessage[];
+  metadata?: Record<string, any>;
 }
 
 
@@ -30,6 +31,11 @@ const ConversationSchema = new Schema<IConversation>({
     default: 'New Conversation',
   },
   messages: [MessageSchema],
+  metadata: {
+    type: Schema.Types.Mixed,
+    required: false,
+    default: {},
+  },
 }, {
   timestamps: true,
 });

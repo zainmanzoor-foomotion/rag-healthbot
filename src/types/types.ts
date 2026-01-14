@@ -3,9 +3,10 @@ export interface Medication {
     purpose: string;
 }
 export interface ReportSummary {
-    filename: string;
-    summary: string;
-    medications: Medication[];
+  reportId?: string; // Added for chat/embedding context
+  filename: string;
+  summary: string;
+  medications: Medication[];
 }
 
 export interface UploadedFile {
