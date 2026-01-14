@@ -40,8 +40,6 @@ export async function POST(req: Request) {
         );
       }
 
-      // Use a dimension-specific index name to avoid dimension mismatch errors.
-      // Example: rag-healthbot-index-384
       const pineconeIndexName = `${pineconeIndexBaseName}-${embeddingDim}`;
       pineconeIndexNameUsed = pineconeIndexName;
       embeddingDimUsed = embeddingDim;

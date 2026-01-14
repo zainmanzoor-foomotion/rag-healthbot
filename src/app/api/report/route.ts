@@ -25,14 +25,12 @@ async function saveToDatabase({ filename, summary, medications, extractedText }:
     try {
         await connectDB();
 
-        // Check if a report with the same filename already exists
         const existingReport = await Report.findOne({ filename });
         if (existingReport) {
             console.log("Report with this filename already exists:", filename);
             return existingReport;
         }
-
-        // Create new report
+        
         const report = await Report.create({
             filename,
             summary,
@@ -105,19 +103,16 @@ Do NOT include any other fields (e.g. dosage, diagnosis, lifestyle advice, signa
 
             let reportData: { summary: string; medications?: { name: string, purpose: string }[]; extractedText?: string };
 
-            // Try to parse and validate JSON
             try {
                 const maybe = JSON.parse(raw);
                 const result = ReportSchema.safeParse(maybe);
                 if (result.success) {
                     reportData = result.data;
                 } else {
-                    // Validation failed — treat as fallback
                     console.warn("Validation failed, using fallback text. Errors:", result.error);
                     reportData = { summary: raw };
                 }
             } catch (e) {
-                // JSON.parse failed — fallback
                 console.warn("JSON.parse failed, using fallback text:", e);
                 reportData = { summary: raw };
             }
@@ -125,7 +120,6 @@ Do NOT include any other fields (e.g. dosage, diagnosis, lifestyle advice, signa
             const meds = reportData.medications ?? [];
             const extractedText = reportData.extractedText ?? "";
 
-            // Persist report so we always have a reportId for chat/embeddings
             const report = await saveToDatabase({
                 filename: file.name,
                 summary: reportData.summary,
@@ -133,7 +127,6 @@ Do NOT include any other fields (e.g. dosage, diagnosis, lifestyle advice, signa
                 extractedText,
             });
 
-            // Now push to summaries (includes reportId so the modal can create chat/embeddings)
             summaries.push({
                 reportId: report._id.toString(),
                 filename: file.name,

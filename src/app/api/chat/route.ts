@@ -21,7 +21,6 @@ export async function POST(req: Request) {
         id: string;
     } = await req.json();
 
-    // 1️⃣ Get last user message
     const lastUserMessage = messages
         .filter((m) => m.role === "user")
         .at(-1);
@@ -32,11 +31,10 @@ export async function POST(req: Request) {
             .map((p) => p.text)
             .join(" ") ?? "";
 
-    // 1.5️⃣ Retrieve conversation to check for reportId
     const conversationDoc = await Chat.findById(chatId);
     let ragMessages = messages;
+
     if (conversationDoc?.metadata?.reportId && userContent) {
-        // Compute embedding for user query
         const qe = (await createEmbeddings([userContent]))[0];
         const embeddingDim = qe?.length ?? 0;
         const indexBase = process.env.PINECONE_INDEX ?? "";
@@ -47,7 +45,7 @@ export async function POST(req: Request) {
         if (!pineconeIndexName) {
             throw new Error("Missing Pinecone index name. Set PINECONE_INDEX in your environment.");
         }
-        // Query Pinecone for relevant chunks
+
         const matches = await queryPinecone(
             pineconeIndexName,
             String(conversationDoc.metadata.reportId),
@@ -56,7 +54,6 @@ export async function POST(req: Request) {
         );
         const retrievedTexts = matches.map((m: any) => (m.metadata && m.metadata.text) ? m.metadata.text : "").filter(Boolean);
         if (retrievedTexts.length) {
-            // Use UIMessage format for system message
             ragMessages = [
                 {
                     id: "system-rag-context",
