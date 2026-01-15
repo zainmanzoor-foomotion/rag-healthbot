@@ -1,4 +1,4 @@
-import mongoose, { Schema, model, Document } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
 
 export interface IMessage {
@@ -9,7 +9,7 @@ export interface IMessage {
 export interface IConversation extends Document {
   title: string;
   messages: IMessage[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 

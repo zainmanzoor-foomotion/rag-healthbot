@@ -11,6 +11,13 @@ import { convertToModelMessages, streamText, UIMessage } from 'ai';
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
+type PineconeMatchWithText = {
+    metadata?: {
+        text?: unknown;
+        [key: string]: unknown;
+    };
+};
+
 export async function POST(req: Request) {
     await connectDB();
     const {
@@ -52,7 +59,9 @@ export async function POST(req: Request) {
             qe,
             5
         );
-        const retrievedTexts = matches.map((m: any) => (m.metadata && m.metadata.text) ? m.metadata.text : "").filter(Boolean);
+        const retrievedTexts = (matches as PineconeMatchWithText[])
+            .map((m) => (typeof m.metadata?.text === "string" ? m.metadata.text : ""))
+            .filter(Boolean);
         if (retrievedTexts.length) {
             ragMessages = [
                 {
@@ -61,7 +70,7 @@ export async function POST(req: Request) {
                     parts: [
                         {
                             type: "text",
-                            text: `Relevant excerpts from the report:\n\n${retrievedTexts.slice(0,5).join("\n\n---\n\n")}\n\nUse them to answer the user concisely and cite when you used report content. The answer should be in layman terms that even non-professional people can understand.`
+                            text: `Relevant excerpts from the report:\n\n${retrievedTexts.slice(0,5).join("\n\n---\n\n")}\n\nUse them to answer the user concisely and cite when you used report content. The answer should be in layman terms that even non-professional people can understand.`,
                         }
                     ]
                 },
@@ -73,7 +82,8 @@ export async function POST(req: Request) {
     // 2️⃣ Start streaming AI response
     const result = streamText({
         model: google("gemini-2.5-flash"),
-        system: "You are a helpful assistant.",
+        system:
+            'You are a helpful medical-information assistant. Always respond in GitHub-Flavored Markdown. Use clear section headings (## / ###), short paragraphs, and bullet lists where helpful. Keep a professional, calm tone. Avoid unnecessary filler. If information is missing or uncertain, say what is unknown and what to ask a clinician.',
         messages: convertToModelMessages(ragMessages),
         async onFinish({ text }) {
             // 3️⃣ Full AI text is available here

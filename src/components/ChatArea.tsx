@@ -2,17 +2,71 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Message } from '@/types/types'; // import your centralized types
 import MessageLoader from './MessageLoader';
 import { UIMessage } from 'ai';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+function MarkdownText({ text }: { text: string }) {
+    return (
+        <div className="whitespace-pre-wrap wrap-break-word">
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    h1: ({ children }) => <h1 className="text-xl font-semibold mt-2 mb-2">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-lg font-semibold mt-3 mb-2">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-base font-semibold mt-3 mb-1">{children}</h3>,
+                    p: ({ children }) => <p className="leading-relaxed my-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc pl-5 my-2 space-y-1">{children}</ul>,
+                    ol: ({ children }) => <ol className="list-decimal pl-5 my-2 space-y-1">{children}</ol>,
+                    li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                    em: ({ children }) => <em className="italic">{children}</em>,
+                    a: ({ children, href }) => (
+                        <a
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline underline-offset-2 text-blue-200 hover:text-blue-100"
+                        >
+                            {children}
+                        </a>
+                    ),
+                    blockquote: ({ children }) => (
+                        <blockquote className="border-l-4 border-gray-500 pl-3 my-2 italic text-gray-100/90">{children}</blockquote>
+                    ),
+                    hr: () => <hr className="border-gray-500/60 my-3" />,
+                    code: ({ children, className }) =>
+                        className ? (
+                            <code className={"font-mono text-sm " + className}>{children}</code>
+                        ) : (
+                            <code className="px-1 py-0.5 rounded bg-black/30 font-mono text-sm">{children}</code>
+                        ),
+                    pre: ({ children }) => (
+                        <pre className="p-3 rounded bg-black/30 overflow-x-auto text-sm leading-relaxed">{children}</pre>
+                    ),
+                    table: ({ children }) => (
+                        <div className="my-3 overflow-x-auto">
+                            <table className="w-full text-sm border-collapse">{children}</table>
+                        </div>
+                    ),
+                    th: ({ children }) => <th className="border border-gray-500/60 px-2 py-1 text-left">{children}</th>,
+                    td: ({ children }) => <td className="border border-gray-500/60 px-2 py-1 align-top">{children}</td>,
+                }}
+            >
+                {text}
+            </ReactMarkdown>
+        </div>
+    );
+}
 
 interface ChatAreaProps {
     currentChat: Message[]; // now an array of Message from Home.tsx
     onSendMessage: (text: string) => void;
     messages: UIMessage[],
-    loading: boolean,
     status: string
 }
 
 
-const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, messages, status, loading }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, messages, status }) => {
     const [inputText, setInputText] = useState('');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,7 +107,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                             {message.userContent && (
                                 <div className="flex justify-end">
                                     <div className="max-w-4xl p-3 rounded-lg shadow-md bg-blue-600 text-white">
-                                        <p>{message.userContent}</p>
+                                        <MarkdownText text={message.userContent} />
                                     </div>
                                 </div>
                             )}
@@ -62,7 +116,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                             {(message.loading || message.aiContent) && (
                                 <div className="flex justify-start">
                                     <div className="max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100">
-                                        <p>{message.aiContent}</p>
+                                        <MarkdownText text={message.aiContent} />
                                     </div>
                                 </div>
                             )}
@@ -80,7 +134,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                                         "max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100"
                                     }>
 
-                                        <p>{part.text}</p>
+                                        <MarkdownText text={part.text} />
                                     </div>
                                 </div>
                             )
@@ -92,7 +146,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                                     }>
 
 
-                                        <p>{part.text}</p>
+                                        <MarkdownText text={part.text} />
                                     </div>
                                 </div>
                             )
@@ -118,7 +172,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                         onKeyDown={handleKeyDown}
                         rows={1}
                         placeholder="Send a message..."
-                        className="flex-grow resize-none bg-gray-800 text-gray-100 border border-gray-700 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 overflow-hidden"
+                        className="grow resize-none bg-gray-800 text-gray-100 border border-gray-700 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 overflow-hidden"
                         style={{ maxHeight: '200px' }}
                     />
                     <button

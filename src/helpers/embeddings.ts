@@ -1,4 +1,5 @@
 import { Errors, Pinecone } from "@pinecone-database/pinecone";
+import type { RecordMetadataValue } from "@pinecone-database/pinecone";
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434";
 const OLLAMA_EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL ?? "all-minilm";
@@ -54,7 +55,29 @@ export async function createEmbeddings(inputs: string[]) {
   return results;
 }
 
-export async function upsertToPinecone(indexName: string, namespace: string, vectors: { id: string; metadata: any; values: number[] }[]) {
+export type PineconeVectorMetadata = Record<string, RecordMetadataValue>;
+
+export type PineconeVector = {
+  id: string;
+  metadata: PineconeVectorMetadata;
+  values: number[];
+};
+
+type PineconeCloud = "aws" | "gcp" | "azure";
+
+function errorName(err: unknown): string | undefined {
+  if (typeof err === "object" && err !== null && "name" in err) {
+    const name = (err as { name?: unknown }).name;
+    return typeof name === "string" ? name : undefined;
+  }
+  return undefined;
+}
+
+function isPineconeNotFound(err: unknown): boolean {
+  return err instanceof Errors.PineconeNotFoundError || errorName(err) === "PineconeNotFoundError";
+}
+
+export async function upsertToPinecone(indexName: string, namespace: string, vectors: PineconeVector[]) {
   if (!indexName || !indexName.trim()) {
     throw new Error("Missing Pinecone index name. Set PINECONE_INDEX in your environment.");
   }
@@ -74,20 +97,19 @@ export async function upsertToPinecone(indexName: string, namespace: string, vec
 
   try {
     await upsertOnce();
-  } catch (e: any) {
+  } catch (e: unknown) {
     // If the index doesn't exist yet, optionally auto-create it.
-    const isNotFound = e?.name === "PineconeNotFoundError" || e instanceof Errors.PineconeNotFoundError;
-    if (!isNotFound) throw e;
+    if (!isPineconeNotFound(e)) throw e;
 
     const dimension = vectors[0]?.values?.length;
     if (!dimension || dimension <= 0) {
       throw new Error("Cannot infer embedding dimension to create Pinecone index.");
     }
 
-    const cloud = process.env.PINECONE_CLOUD;
+    const cloud = process.env.PINECONE_CLOUD as PineconeCloud | undefined;
     const region = process.env.PINECONE_REGION;
 
-    if (!cloud || !region) {
+    if (!cloud || !region || !["aws", "gcp", "azure"].includes(cloud)) {
       throw new Error(
         `Pinecone index '${indexName}' not found. Create it in Pinecone or set PINECONE_CLOUD and PINECONE_REGION so the app can auto-create it.`
       );
@@ -96,7 +118,7 @@ export async function upsertToPinecone(indexName: string, namespace: string, vec
     await client.createIndex({
       name: indexName,
       dimension,
-      spec: { serverless: { cloud: cloud as any, region } },
+      spec: { serverless: { cloud, region } },
       suppressConflicts: true,
       waitUntilReady: true,
     });
@@ -119,9 +141,8 @@ export async function queryPinecone(indexName: string, namespace: string, vector
   try {
     const resp = await index.query({ vector, topK, includeMetadata: true });
     return resp.matches || [];
-  } catch (e: any) {
-    const isNotFound = e?.name === "PineconeNotFoundError" || e instanceof Errors.PineconeNotFoundError;
-    if (isNotFound) {
+  } catch (e: unknown) {
+    if (isPineconeNotFound(e)) {
       throw new Error(`Pinecone index '${indexName}' not found. Check PINECONE_INDEX or create the index in Pinecone.`);
     }
     throw e;

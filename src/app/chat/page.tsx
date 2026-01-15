@@ -177,8 +177,7 @@ export default function Home() {
         onDeleteConversation={handleDeleteConversation}
         conversationLoading={conversationLoading}
       />
-      <ChatArea currentChat={currentChat} onSendMessage={handleSendMessage} loading={loading}
-        messages={messages} status={status} />
+      <ChatArea currentChat={currentChat} onSendMessage={handleSendMessage} messages={messages} status={status} />
       {/* <div>
         Messgaes 
          {messages.map(message => (

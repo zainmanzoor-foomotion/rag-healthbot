@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {connectDB} from "@/helpers/mongodb";
-import Report from "@/schemas/Report";
+import Report, { IReport } from "@/schemas/Report";
 import Conversation from "@/schemas/Coversation";
 import { chunkText, createEmbeddings, upsertToPinecone } from "@/helpers/embeddings";
 
@@ -18,10 +18,10 @@ export async function POST(req: Request) {
     }
 
     await connectDB();
-    const reportDoc = await Report.findById(reportId);
+    const reportDoc = (await Report.findById(reportId)) as IReport | null;
     if (!reportDoc) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-    const text = (reportDoc as any).extractedText || "";
+    const text = reportDoc.extractedText ?? "";
     if (!text || text.length < 20) {
       return NextResponse.json({ error: "no text available for embeddings" }, { status: 400 });
     }
