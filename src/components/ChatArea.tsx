@@ -25,7 +25,7 @@ function MarkdownText({ text }: { text: string }) {
                             href={href}
                             target="_blank"
                             rel="noreferrer"
-                            className="underline underline-offset-2 text-blue-200 hover:text-blue-100"
+                            className="underline underline-offset-2 text-slate-300 hover:text-slate-200"
                         >
                             {children}
                         </a>
@@ -106,7 +106,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                             {/* USER MESSAGE */}
                             {message.userContent && (
                                 <div className="flex justify-end">
-                                    <div className="max-w-4xl p-3 rounded-lg shadow-md bg-blue-600 text-white">
+                                    <div className="max-w-4xl p-3 rounded-lg shadow-md bg-slate-700 text-white">
                                         <MarkdownText text={message.userContent} />
                                     </div>
                                 </div>
@@ -130,7 +130,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                         {message.role === 'user' ?
                             message.parts.map((part, index) =>
                                 part.type === 'text' && <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                                    <div className={message.role === 'user' ? "max-w-4xl p-3 rounded-lg shadow-md bg-blue-600 text-white" :
+                                    <div className={message.role === 'user' ? "max-w-4xl p-3 rounded-lg shadow-md bg-slate-700 text-white" :
                                         "max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100"
                                     }>
 
@@ -141,7 +141,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                             :
                             message.parts.map((part, index) =>
                                 part.type === 'text' && <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                                    <div className={message.role === 'user' ? "max-w-4xl p-3 rounded-lg shadow-md bg-blue-600 text-white" :
+                                    <div className={message.role === 'user' ? "max-w-4xl p-3 rounded-lg shadow-md bg-slate-700 text-white" :
                                         "max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100"
                                     }>
 
@@ -172,14 +172,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                         onKeyDown={handleKeyDown}
                         rows={1}
                         placeholder="Send a message..."
-                        className="grow resize-none bg-gray-800 text-gray-100 border border-gray-700 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 overflow-hidden"
+                        className="grow resize-none bg-gray-800 text-gray-100 border border-gray-700 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-slate-600 overflow-hidden"
                         style={{ maxHeight: '200px' }}
                     />
                     <button
                         type="submit"
                         disabled={!inputText.trim() || status !== 'ready'}
                         className={`ml-3 py-3 px-5 rounded-lg transition duration-150 ${inputText.trim() && status == 'ready'
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                            ? 'bg-slate-700 hover:bg-slate-600 text-white cursor-pointer'
                             : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                             }`}
                     >
