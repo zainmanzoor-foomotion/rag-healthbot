@@ -1,31 +1,80 @@
-# --- Next.js / Node.js (Recursive) ---
+############################
+# Node.js / Next.js
+############################
+
+# Dependencies
 node_modules/
+
+# Next.js build output
 .next/
 out/
+
+# Turborepo / Next cache
+.turbo/
+
+# General build output (keep broad; matches build/ in any subdir)
+dist/
 build/
-.env*.local
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
-.pnpm-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
 
-# --- Python (Recursive) ---
+# TypeScript / tooling caches
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# Environment files (do not commit secrets)
+.env
+.env.*
+!.env.example
+
+# Deployment
+.vercel/
+
+############################
+# Python
+############################
+
+# Byte-compiled / optimized files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Virtual environments
 .venv/
 venv/
 ENV/
 env/
+
+# Python tooling
 .python-version
 .pytest_cache/
 .tox/
 .coverage
+.coverage.*
 htmlcov/
-*.log
 .mypy_cache/
+.ruff_cache/
+.hypothesis/
 
-# --- OS / IDE (Recursive) ---
+############################
+# OS / IDE
+############################
+
 .DS_Store
+Thumbs.db
+Desktop.ini
+
 .vscode/
 .idea/
 *.swp
+*.swo
+
+# Local workspace noise
+*.tmp
+*.temp
