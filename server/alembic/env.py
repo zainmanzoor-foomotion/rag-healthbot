@@ -20,6 +20,9 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 
 from src.db import Base
+from src.Models.Medication import Medication
+from src.Models.Report import Report
+from src.Models.ReportMedication import ReportMedication
 
 target_metadata = Base.metadata
 
