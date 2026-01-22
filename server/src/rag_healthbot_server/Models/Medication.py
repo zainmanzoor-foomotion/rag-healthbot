@@ -5,6 +5,12 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class IMedication(BaseModel):
+    name: str
+    rxnorm_code: str | None = None
+    ndc_code: str | None = None
+
+
 class Medication(Base):
     __tablename__ = "medication"
 

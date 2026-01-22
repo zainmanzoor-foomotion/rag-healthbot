@@ -5,6 +5,16 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class IReportMedication(BaseModel):
+    report_id: int
+    medication_id: int
+    dosage: str | None = None
+    frequency: str | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    purpose: str | None = None
+
+
 class ReportMedication(Base):
     __tablename__ = "report_medication"
 

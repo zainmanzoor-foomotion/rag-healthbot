@@ -5,6 +5,13 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class IReport(BaseModel):
+    file_name: str
+    summary: str
+    extracted_text: str | None = None
+    medications: list[int] = []
+
+
 class Report(Base):
     __tablename__ = "report"
 

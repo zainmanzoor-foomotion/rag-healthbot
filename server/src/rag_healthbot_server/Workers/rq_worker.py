@@ -1,7 +1,7 @@
 from rq import Queue
-from src.Workers.metrics_worker import MetricsWorker
+from .metrics_worker import MetricsWorker
 from redis import Redis
-from src.config import settings
+from ..config import settings
 import logging, signal
 
 redis_conn = Redis.from_url(settings.redis_url)
