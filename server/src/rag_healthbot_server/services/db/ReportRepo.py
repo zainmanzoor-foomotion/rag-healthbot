@@ -1,7 +1,14 @@
 from rag_healthbot_server import db
+from rag_healthbot_server.Models.Report import IReport, Report
+from pydantic import validate_call
 
 
-def create_report():
+@validate_call
+def create_report(data: IReport):
+    _data = Report(**data.model_dump())
+    db.session.add(_data)
+    db.session.commit()
+    return _data
     pass
 
 
