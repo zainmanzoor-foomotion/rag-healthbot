@@ -19,14 +19,15 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 
-from src.db import Base
-from src.Models.Medication import Medication
-from src.Models.Report import Report
-from src.Models.ReportMedication import ReportMedication
+from rag_healthbot_server.db import Base
+from rag_healthbot_server.Models.Medication import Medication
+from rag_healthbot_server.Models.Report import Report
+from rag_healthbot_server.Models.ReportMedication import ReportMedication
+from rag_healthbot_server.Models.ReportEmbedding import ReportEmbedding
 
 target_metadata = Base.metadata
 
-from src.config import settings
+from rag_healthbot_server.config import settings
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

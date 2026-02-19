@@ -10,9 +10,12 @@ class Settings(BaseSettings):
     groq_api_key: str = Field(default="", validation_alias="GROQ_API_KEY")
 
     llm_model: str = Field(default="openai/gpt-oss-120b", validation_alias="LLM_MODEL")
+    ollama_host: str = Field(default="", validation_alias="OLLAMA_HOST")
+    ollama_embed_model: str = Field(default="", validation_alias="OLLAMA_EMBED_MODEL")
+    vector_dimension: int = Field(default=0, validation_alias="VECTOR_DIMENSION")
 
     prometheus_multiproc_dir: str = Field(
-        default="/tmp/mar_prometheus", validation_alias="PROMETHEUS_MULTIPROC_DIR"
+        default="/tmp/healthrag_prometheus", validation_alias="PROMETHEUS_MULTIPROC_DIR"
     )
 
     model_config = SettingsConfigDict(

@@ -30,3 +30,24 @@ uv run fastapi deploy
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com)
 - [FastAPI Cloud](https://fastapicloud.com)
+
+## Model Contracts
+
+{
+"run_id": "uuid",
+"agent_type": "booking_agent",
+"intent": "book_meeting",
+"input": {
+"user_request": "Book a call with sales tomorrow at 3pm",
+"extracted_entities": {
+"date": "2026-01-09",
+"time": "15:00",
+"department": "sales"
+}
+},
+"constraints": {
+"max_tool_calls": 3,
+"timeout_ms": 5000
+},
+"schema_version": "1.0"
+}
