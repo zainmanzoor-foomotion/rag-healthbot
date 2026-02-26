@@ -1,53 +1,80 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import ChatArea from '@/components/ChatArea';
 import { Conversation, Message } from '@/types/types';
-import { IConversation } from '@/schemas/Coversation';
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { useSearchParams } from 'next/navigation';
+
+type SseTokenEvent = { type: 'token'; token: string };
+
+type ApiConversation = {
+  _id?: string;
+  id?: string;
+  title: string;
+  messages?: Array<{ userContent?: string; aiContent?: string }>;
+  metadata?: Record<string, unknown>;
+};
+
+function getConversationId(chat: ApiConversation): string | null {
+  const raw = chat._id ?? chat.id;
+  if (raw == null) return null;
+  const id = String(raw).trim();
+  return id ? id : null;
+}
+
+function isSseTokenEvent(value: unknown): value is SseTokenEvent {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return v.type === 'token' && typeof v.token === 'string';
+}
 
 export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string>('');
-  const [currentChat, setCurrentChat] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [conversationLoading, setConversationLoading] = useState(false);
 
-  const { messages, sendMessage, status } = useChat({
-    id: currentChatId,
-    transport: new DefaultChatTransport({
-      api: '/api/chat',
-    }),
-  });
+  const searchParams = useSearchParams();
 
-
-  // Fetch conversations on mount
-  useEffect(() => {
-    fetchChats();
-  }, []);
-
-  const fetchChats = async () => {
+  const fetchChats = useCallback(async () => {
     try {
       setConversationLoading(true)
       const res = await fetch('/api/conversations');
-      const data: IConversation[] = await res.json();
 
-      const formatted: Conversation[] = data.map(chat => ({
-        id: chat._id.toString(),
-        title: chat.title,
-        messages: (chat.messages || []).map(msg => ({
-          userContent: msg.userContent || '',
-          aiContent: msg.aiContent || '',
-        })),
-      }));
+      const json = (await res.json()) as unknown;
+      if (!Array.isArray(json)) {
+        console.error('Unexpected /api/conversations payload:', json);
+        setConversations([]);
+        setCurrentChatId('');
+        return;
+      }
+
+      const data = json as ApiConversation[];
+      const formatted: Conversation[] = data
+        .map((chat) => {
+          const id = getConversationId(chat);
+          if (!id) return null;
+          return {
+            id,
+            title: chat.title,
+            messages: (chat.messages || []).map((msg) => ({
+              userContent: msg.userContent || '',
+              aiContent: msg.aiContent || '',
+            })),
+          };
+        })
+        .filter((c): c is Conversation => Boolean(c));
 
       setConversations(formatted);
 
-      if (formatted.length > 0) {
+      const queryId = searchParams.get('id');
+      if (queryId && formatted.some((c) => c.id === queryId)) {
+        setCurrentChatId(queryId);
+      } else if (formatted.length > 0) {
         setCurrentChatId(formatted[0].id);
-        setCurrentChat(formatted[0].messages);
+      } else {
+        setCurrentChatId('');
       }
     } catch (err) {
       console.error('Failed to fetch chats:', err);
@@ -55,79 +82,134 @@ export default function Home() {
     finally {
       setConversationLoading(false)
     }
+  }, [searchParams]);
+
+  const streamChat = async (conversationId: string, message: string) => {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId, message }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(text || `Chat failed (${res.status})`);
+    }
+    if (!res.body) {
+      throw new Error('No response body');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, '\n');
+
+      let sepIndex: number;
+      while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
+        const rawEvent = buffer.slice(0, sepIndex);
+        buffer = buffer.slice(sepIndex + 2);
+
+        const dataLine = rawEvent
+          .split('\n')
+          .find((l) => l.startsWith('data: '));
+        if (!dataLine) continue;
+
+        const jsonPart = dataLine.slice('data: '.length);
+        let evt: unknown;
+        try {
+          evt = JSON.parse(jsonPart);
+        } catch {
+          continue;
+        }
+
+        if (isSseTokenEvent(evt)) {
+          const token = evt.token;
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c.id !== conversationId) return c;
+              const messages = [...(c.messages || [])];
+              if (!messages.length) return c;
+              const lastIndex = messages.length - 1;
+              const last = messages[lastIndex];
+              messages[lastIndex] = {
+                ...last,
+                aiContent: (last.aiContent || '') + token,
+              };
+              return { ...c, messages };
+            })
+          );
+        }
+      }
+    }
   };
 
-  // Update currentChat whenever currentChatId changes
+  // Fetch conversations on mount
   useEffect(() => {
-    const chat = conversations.find(c => c.id === currentChatId);
-    setCurrentChat(chat ? chat.messages : []);
-  }, [currentChatId, conversations]);
+    fetchChats();
+  }, [fetchChats]);
+
+  const currentChat: Message[] =
+    conversations.find((c) => c.id === currentChatId)?.messages ?? [];
+
+  
 
   // Send message
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
-    setLoading(true)
-    if (text.trim()) {
-      await sendMessage({ text });
-      setLoading(false)
+
+    const chatIdToUse = currentChatId;
+    if (!chatIdToUse) return;
+
+    const userMessage: Message = { userContent: text, aiContent: '' };
+    const assistantMessage: Message = { userContent: '', aiContent: '', loading: true };
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === chatIdToUse
+          ? { ...c, messages: [...c.messages, userMessage, assistantMessage] }
+          : c
+      )
+    );
+
+    setIsSending(true);
+    try {
+      await streamChat(chatIdToUse, text);
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== chatIdToUse) return c;
+          const messages = [...(c.messages || [])];
+          if (!messages.length) return c;
+          const lastIndex = messages.length - 1;
+          messages[lastIndex] = { ...messages[lastIndex], loading: false };
+          return { ...c, messages };
+        })
+      );
+    } catch (e) {
+      console.error(e);
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== chatIdToUse) return c;
+          const messages = [...(c.messages || [])];
+          if (!messages.length) return c;
+          const lastIndex = messages.length - 1;
+          messages[lastIndex] = {
+            ...messages[lastIndex],
+            loading: false,
+            aiContent:
+              (messages[lastIndex].aiContent || '') +
+              '\n\n[Error] Failed to get response.',
+          };
+          return { ...c, messages };
+        })
+      );
+    } finally {
+      setIsSending(false);
     }
-
-    // let chatIdToUse = currentChatId;
-
-    // const userMessage: Message = { userContent: text, aiContent: '' };
-    // const loaderMessage: Message = { userContent: '', aiContent: '', loading: true };
-
-    // // 2️⃣ Optimistic frontend update
-    // setConversations(prev =>
-    //   prev.map(c =>
-    //     c.id === chatIdToUse
-    //       ? { ...c, messages: [...c.messages, userMessage, loaderMessage] }
-    //       : c
-    //   )
-    // );
-    // setLoading(true)
-    // // 3️⃣ Send to backend
-    // const res = await fetch('/api/chat', {
-    //   method: 'POST',
-    //   body: JSON.stringify({ chatId: chatIdToUse, messages: userMessage }),
-    //   headers: { 'Content-Type': 'application/json' },
-    // });
-
-    // if (!res.ok) {
-    //   console.error('Error sending message');
-    //   return;
-    // }
-
-    // // Get the updated chat with AI content from backend
-    // const updatedChat = await res.json();
-
-    // console.log('updated Chat', updatedChat)
-
-    // setLoading(false)
-
-    // // Update conversations state
-    // setConversations(prev =>
-    //   prev.map(c =>
-    //     c.id === chatIdToUse
-    //       ? {
-    //         ...updatedChat,   // all other fields from backend
-    //         id: updatedChat._id  // set id for frontend consistency
-    //       }
-    //       : c
-    //   )
-    // );
-    // // Mark loader as complete (if you still have a loading flag in messages)
-    // setConversations(prev =>
-    //   prev.map(c => {
-    //     if (c.id === chatIdToUse) {
-    //       const updatedMessages = c.messages.map(m =>
-    //         m.loading ? { ...m, loading: false } : m
-    //       );
-    //       return { ...c, messages: updatedMessages };
-    //     }
-    //     return c;
-    //   })
-    // );
   };
 
   const startNewChat = async () => {
@@ -140,7 +222,7 @@ export default function Home() {
         body: JSON.stringify({ title: newTitle }),
       });
 
-      const data = await res.json();
+      await res.json();
 
       if (res.ok) {
         await fetchChats();
@@ -177,18 +259,7 @@ export default function Home() {
         onDeleteConversation={handleDeleteConversation}
         conversationLoading={conversationLoading}
       />
-      <ChatArea currentChat={currentChat} onSendMessage={handleSendMessage} messages={messages} status={status} />
-      {/* <div>
-        Messgaes 
-         {messages.map(message => (
-        <div key={message.id}>d
-          {message.role === 'user' ? 'User: ' : 'AI: '}
-          {message.parts.map((part, index) =>
-            part.type === 'text' ? <span key={index}>{part.text}</span> : null,
-          )}
-        </div>
-      ))}
-      </div> */}
+      <ChatArea currentChat={currentChat} onSendMessage={handleSendMessage} isSending={isSending} />
     </div>
   );
 }

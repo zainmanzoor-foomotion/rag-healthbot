@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message } from '@/types/types'; // import your centralized types
 import MessageLoader from './MessageLoader';
-import { UIMessage } from 'ai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -61,12 +60,11 @@ function MarkdownText({ text }: { text: string }) {
 interface ChatAreaProps {
     currentChat: Message[]; // now an array of Message from Home.tsx
     onSendMessage: (text: string) => void;
-    messages: UIMessage[],
-    status: string
+    isSending: boolean
 }
 
 
-const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, messages, status }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, isSending }) => {
     const [inputText, setInputText] = useState('');
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -78,11 +76,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (status === 'ready') {
-            if (inputText.trim()) {
-                onSendMessage(inputText);
-                setInputText('');
-            }
+        if (!isSending && inputText.trim()) {
+            onSendMessage(inputText);
+            setInputText('');
         }
     };
 
@@ -97,7 +93,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
         <main className="flex-1 flex flex-col">
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4">
-                {currentChat.length === 0 && messages.length === 0 ?
+                {currentChat.length === 0 ?
                     (<div className="flex h-full items-center justify-center text-gray-500 text-xl"> Start a new conversation
                     </div>) :
                     currentChat.map((message, index) => (
@@ -116,7 +112,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                             {(message.loading || message.aiContent) && (
                                 <div className="flex justify-start">
                                     <div className="max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100">
-                                        <MarkdownText text={message.aiContent} />
+                                        {message.loading && !message.aiContent ? (
+                                            <MessageLoader />
+                                        ) : (
+                                            <MarkdownText text={message.aiContent} />
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -125,41 +125,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
 
                         </div>
                     ))}
-                {messages.map(message => (
-                    <div key={message.id}>
-                        {message.role === 'user' ?
-                            message.parts.map((part, index) =>
-                                part.type === 'text' && <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                                    <div className={message.role === 'user' ? "max-w-4xl p-3 rounded-lg shadow-md bg-slate-700 text-white" :
-                                        "max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100"
-                                    }>
-
-                                        <MarkdownText text={part.text} />
-                                    </div>
-                                </div>
-                            )
-                            :
-                            message.parts.map((part, index) =>
-                                part.type === 'text' && <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                                    <div className={message.role === 'user' ? "max-w-4xl p-3 rounded-lg shadow-md bg-slate-700 text-white" :
-                                        "max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100"
-                                    }>
-
-
-                                        <MarkdownText text={part.text} />
-                                    </div>
-                                </div>
-                            )
-                        }
-                    </div>
-                ))}
-                {status === 'submitted' &&
-                    <div className="flex justify-start">
-                        <div className="max-w-4xl p-3 rounded-lg shadow-md bg-gray-700 text-gray-100">
-                            <MessageLoader />
-                        </div>
-                    </div>
-                }
                 <div ref={messagesEndRef} />
             </div>
 
@@ -177,8 +142,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({ currentChat, onSendMessage, message
                     />
                     <button
                         type="submit"
-                        disabled={!inputText.trim() || status !== 'ready'}
-                        className={`ml-3 py-3 px-5 rounded-lg transition duration-150 ${inputText.trim() && status == 'ready'
+                        disabled={!inputText.trim() || isSending}
+                        className={`ml-3 py-3 px-5 rounded-lg transition duration-150 ${inputText.trim() && !isSending
                             ? 'bg-slate-700 hover:bg-slate-600 text-white cursor-pointer'
                             : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                             }`}

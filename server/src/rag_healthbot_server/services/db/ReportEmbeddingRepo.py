@@ -25,8 +25,13 @@ def create_report_embeddings(data: IReportEmbeddings) -> list[ReportEmbedding]:
     texts = payload.pop("texts")
     created_links = []
     try:
-        for embedding, text in zip(embeddings, texts):
-            link = ReportEmbedding(report_id=report_id, embedding=embedding, text=text)
+        for chunk_index, (embedding, text) in enumerate(zip(embeddings, texts)):
+            link = ReportEmbedding(
+                report_id=report_id,
+                chunk_index=chunk_index,
+                embedding=embedding,
+                text=text,
+            )
             db.session.add(link)
             created_links.append(link)
 
@@ -48,6 +53,26 @@ def get_report_embedding(report_embedding_id: int) -> ReportEmbedding | None:
 @validate_call
 def list_report_embeddings(report_id: int) -> list[ReportEmbedding]:
     stmt = select(ReportEmbedding).where(ReportEmbedding.report_id == report_id)
+    return list(db.session.scalars(stmt).all())
+
+
+@validate_call
+def search_report_embeddings_by_cosine_distance(
+    report_id: int,
+    query_embedding: list[float],
+    top_k: int = 6,
+) -> list[ReportEmbedding]:
+    if top_k <= 0:
+        return []
+
+    # pgvector SQLAlchemy comparator exposes cosine_distance.
+    distance = ReportEmbedding.embedding.cosine_distance(query_embedding)
+    stmt = (
+        select(ReportEmbedding)
+        .where(ReportEmbedding.report_id == report_id)
+        .order_by(distance.asc())
+        .limit(int(top_k))
+    )
     return list(db.session.scalars(stmt).all())
 
 

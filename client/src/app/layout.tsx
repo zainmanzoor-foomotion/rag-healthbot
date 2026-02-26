@@ -25,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html>
-      <body cz-shortcut-listen="true">
+      <body className={`${geistSans.variable} ${geistMono.variable}`} cz-shortcut-listen="true">
 
         <ToastProvider>
           {children}

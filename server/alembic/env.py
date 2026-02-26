@@ -24,6 +24,7 @@ from rag_healthbot_server.Models.Medication import Medication
 from rag_healthbot_server.Models.Report import Report
 from rag_healthbot_server.Models.ReportMedication import ReportMedication
 from rag_healthbot_server.Models.ReportEmbedding import ReportEmbedding
+from rag_healthbot_server.Models.Conversation import Conversation
 
 target_metadata = Base.metadata
 

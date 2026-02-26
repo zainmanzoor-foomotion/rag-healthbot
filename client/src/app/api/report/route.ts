@@ -1,54 +1,85 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
-import { z } from "zod";
-
-import { connectDB } from "@/helpers/mongodb";
-import Report from "@/schemas/Report";
 import { ReportSummary } from "@/types/types";
 
+export const runtime = "nodejs";
 
-const MedicationSchema = z.object({
-    name: z.string(),
-    purpose: z.string(),
-});
+type UploadItem = {
+    file_name: string;
+    mime_type: string;
+    file_content: string; // base64
+};
 
-const ReportSchema = z.object({
-    summary: z.string(),
-    medications: z.array(MedicationSchema).optional(),
-    extractedText: z.string().optional(),
-});
+type UploadResponse = {
+    jobs: Array<{ job_id: string; file_name: string }>;
+};
 
-type Report = z.infer<typeof ReportSchema>;
+type OrchestratorMedication = {
+    name?: string;
+    text?: string;
+    dosage?: string | null;
+    frequency?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    purpose?: string | null;
+};
 
+type OrchestratorOutput = {
+    report_id?: number;
+    summary?: string;
+    medications?: OrchestratorMedication[];
+};
 
-async function saveToDatabase({ filename, summary, medications, extractedText }: ReportSummary & { extractedText?: string }) {
-    try {
-        await connectDB();
+type OrchestratorResult = {
+    status?: string;
+    reason_code?: string;
+    output?: OrchestratorOutput | null;
+};
 
-        const existingReport = await Report.findOne({ filename });
-        if (existingReport) {
-            console.log("Report with this filename already exists:", filename);
-            return existingReport;
+type JobStatusResponse = {
+    job_id: string;
+    status: string;
+    stage?: string | null;
+    result?: OrchestratorResult;
+    error?: string | null;
+};
+
+function getServerBaseUrl() {
+    // Should point to the FastAPI base, including /api
+    // Example: http://localhost:8000/api
+    return process.env.RAG_HEALTHBOT_SERVER_URL ?? "http://localhost:8000/api";
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollJob(baseUrl: string, jobId: string, timeoutMs = 120_000) {
+    const started = Date.now();
+    while (true) {
+        const res = await fetch(`${baseUrl}/report/jobs/${jobId}`);
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(`Failed to poll job ${jobId}: ${res.status} ${text}`);
         }
-        
-        const report = await Report.create({
-            filename,
-            summary,
-            medications,
-            extractedText,
-        });
+        const data = (await res.json()) as JobStatusResponse;
 
-        return report;
-    } catch (error) {
-        console.error("Error saving report:", error);
-        throw new Error("Failed to save report");
+        if (data.status === "failed") {
+            throw new Error(data.error ?? `Job ${jobId} failed`);
+        }
+        if (data.status === "finished") {
+            return data;
+        }
+
+        if (Date.now() - started > timeoutMs) {
+            throw new Error(`Timed out waiting for job ${jobId}`);
+        }
+        await sleep(1000);
     }
 }
 
 
 export async function POST(req: Request) {
     try {
-        await connectDB();
         const formData = await req.formData();
         const files = formData.getAll("file") as File[];
 
@@ -56,84 +87,62 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
         }
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
+        const baseUrl = getServerBaseUrl();
 
-        const summaries: ReportSummary[] = [];
-
-
-                for (const file of files) {
+        const uploadItems: UploadItem[] = [];
+        for (const file of files) {
             const arrayBuffer = await file.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             const base64 = buffer.toString("base64");
 
-            const contents = [
-                {
-                    inlineData: {
-                        mimeType: "application/pdf",
-                        data: base64,
-                    },
-                },
-                `
-You are a medical summarization specialist.
-Return a JSON object (not HTML or markdown) summarizing the medical report from the PDF with exactly the following structure:
-
-{
-  "summary": "<plain-text summary of patient condition and key findings>",
-  "medications": [
-    { "name": "<medication name>", "purpose": "<the medication’s purpose / explanation>" }
-    ...
-    ],
-    "extractedText": "<plain-text extracted content from the report suitable for later Q&A; omit PHI if present; keep within ~12000 characters>"
-}
-
-Do NOT include any other fields (e.g. dosage, diagnosis, lifestyle advice, signature, etc.).
-`
-            ];
-
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents,
-            });
-            let raw = response.text ?? "";
-            if (raw.startsWith("```json")) {
-                raw = raw.replace(/^```json\s*/, "");
-                raw = raw.replace(/\s*```$/, "");
-            }
-            raw = raw.trim();
-
-            let reportData: { summary: string; medications?: { name: string, purpose: string }[]; extractedText?: string };
-
-            try {
-                const maybe = JSON.parse(raw);
-                const result = ReportSchema.safeParse(maybe);
-                if (result.success) {
-                    reportData = result.data;
-                } else {
-                    console.warn("Validation failed, using fallback text. Errors:", result.error);
-                    reportData = { summary: raw };
-                }
-            } catch (e) {
-                console.warn("JSON.parse failed, using fallback text:", e);
-                reportData = { summary: raw };
-            }
-
-            const meds = reportData.medications ?? [];
-            const extractedText = reportData.extractedText ?? "";
-
-            const report = await saveToDatabase({
-                filename: file.name,
-                summary: reportData.summary,
-                medications: meds,
-                extractedText,
-            });
-
-            summaries.push({
-                reportId: report._id.toString(),
-                filename: file.name,
-                summary: reportData.summary,
-                medications: meds,
+            uploadItems.push({
+                file_name: file.name,
+                mime_type: file.type || "application/pdf",
+                file_content: base64,
             });
         }
+
+        const uploadRes = await fetch(`${baseUrl}/report`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: uploadItems }),
+        });
+
+        if (!uploadRes.ok) {
+            const text = await uploadRes.text().catch(() => "");
+            return NextResponse.json(
+                { error: `FastAPI upload failed: ${uploadRes.status} ${text}` },
+                { status: 502 }
+            );
+        }
+
+        const uploadData = (await uploadRes.json()) as UploadResponse;
+        const jobs = uploadData.jobs ?? [];
+
+        const jobResults = await Promise.all(
+            jobs.map(async (j) => {
+                const status = await pollJob(baseUrl, j.job_id);
+                return { file_name: j.file_name, job_id: j.job_id, status };
+            })
+        );
+
+        const summaries: ReportSummary[] = jobResults.map(({ file_name, status }) => {
+            const orchestratorResult = status.result;
+            const output = orchestratorResult?.output;
+            const reportId = output?.report_id;
+            const summary = output?.summary ?? "";
+            const medsRaw = output?.medications ?? [];
+
+            return {
+                reportId: reportId != null ? String(reportId) : undefined,
+                filename: file_name,
+                summary,
+                medications: medsRaw.map((m) => ({
+                    name: String(m.name ?? m.text ?? ""),
+                    purpose: String(m.purpose ?? ""),
+                })),
+            };
+        });
 
         return NextResponse.json({ summaries });
     } catch (err) {

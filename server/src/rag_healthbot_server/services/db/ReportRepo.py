@@ -6,6 +6,7 @@ from rag_healthbot_server.Models.ReportMedication import ReportMedication
 
 from pydantic import validate_call
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 
 
@@ -52,6 +53,30 @@ def get_report(report_id: int) -> Report | None:
     return db.session.scalar(stmt)
 
 
+@validate_call
+def get_report_by_content_hash(content_hash: str) -> Report | None:
+    stmt = (
+        select(Report)
+        .where(Report.content_hash == content_hash)
+        .options(
+            selectinload(Report.medications).selectinload(ReportMedication.medication)
+        )
+    )
+    return db.session.scalar(stmt)
+
+
+@validate_call
+def get_report_by_extracted_text_hash(extracted_text_hash: str) -> Report | None:
+    stmt = (
+        select(Report)
+        .where(Report.extracted_text_hash == extracted_text_hash)
+        .options(
+            selectinload(Report.medications).selectinload(ReportMedication.medication)
+        )
+    )
+    return db.session.scalar(stmt)
+
+
 def list_reports() -> list[Report]:
     stmt = select(Report).order_by(Report.created_at.desc())
     return list(db.session.scalars(stmt).all())
@@ -85,6 +110,10 @@ def update_report(report_id: int, data: IReport) -> Report | None:
         report.summary = data.summary
     if "extracted_text" in fields_set:
         report.extracted_text = data.extracted_text
+    if "content_hash" in fields_set:
+        report.content_hash = data.content_hash
+    if "extracted_text_hash" in fields_set:
+        report.extracted_text_hash = data.extracted_text_hash
 
     try:
         if "medications" in fields_set:
