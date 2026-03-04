@@ -101,6 +101,7 @@ def normalize_and_dedupe_medications(
                 start_date=med.start_date,
                 end_date=med.end_date,
                 purpose=med.purpose,
+                cui=med.cui,
             )
             continue
 
@@ -112,6 +113,7 @@ def normalize_and_dedupe_medications(
             start_date=existing.start_date or med.start_date,
             end_date=existing.end_date or med.end_date,
             purpose=existing.purpose or med.purpose,
+            cui=existing.cui or med.cui,
         )
 
     return list(by_key.values())

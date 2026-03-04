@@ -5,36 +5,30 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class IReportMedication(BaseModel):
+class IReportDisease(BaseModel):
     report_id: int
-    medication_id: int
-    dosage: str | None = None
-    frequency: str | None = None
-    start_date: datetime | None = None
-    end_date: datetime | None = None
-    purpose: str | None = None
+    disease_id: int
+    severity: str | None = None
+    status: str | None = None
+    onset_date: datetime | None = None
     coding_confidence: float | None = None
     review_status: str = "pending_review"
     review_notes: str | None = None
     candidates_json: str | None = None
 
 
-class ReportMedication(Base):
-    __tablename__ = "report_medication"
+class ReportDisease(Base):
+    __tablename__ = "report_disease"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     report_id: Mapped[int] = mapped_column(
         ForeignKey("report.id", ondelete="CASCADE"), nullable=False
     )
-    medication_id: Mapped[int] = mapped_column(
-        ForeignKey("medication.id"), nullable=False
-    )
+    disease_id: Mapped[int] = mapped_column(ForeignKey("disease.id"), nullable=False)
 
-    dosage: Mapped[str] = mapped_column(nullable=True)
-    frequency: Mapped[str] = mapped_column(nullable=True)
-    start_date: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
-    end_date: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
-    purpose: Mapped[str] = mapped_column(nullable=True)
+    severity: Mapped[str | None] = mapped_column(nullable=True)
+    status: Mapped[str | None] = mapped_column(nullable=True)
+    onset_date: Mapped[DateTime | None] = mapped_column(DateTime, nullable=True)
 
     # Per-report review tracking (coding is scoped to this report occurrence)
     coding_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -51,5 +45,5 @@ class ReportMedication(Base):
         DateTime, nullable=False, default=datetime.now(), onupdate=datetime.now()
     )
 
-    report = relationship("Report", back_populates="medications")
-    medication = relationship("Medication", back_populates="reports")
+    report = relationship("Report", back_populates="diseases")
+    disease = relationship("Disease", back_populates="reports")

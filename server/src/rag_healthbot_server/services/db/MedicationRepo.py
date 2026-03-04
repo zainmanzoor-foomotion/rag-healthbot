@@ -84,16 +84,25 @@ def delete_medication(medication_id: int) -> bool:
         raise
 
 
-@validate_call
-def update_medication(medication_id: int, data: IMedication) -> Medication | None:
+def update_medication(
+    medication_id: int, updates: dict[str, str | None]
+) -> Medication | None:
     medication = get_medication(medication_id)
     if medication is None:
         return None
 
-    payload = data.model_dump()
-    for key in ("name", "rxnorm_code", "ndc_code"):
-        if key in payload:
-            setattr(medication, key, payload[key])
+    for key in (
+        "name",
+        "cui",
+        "rxnorm_code",
+        "ndc_code",
+        "confidence",
+        "review_status",
+        "review_notes",
+        "is_drug_class",
+    ):
+        if key in updates:
+            setattr(medication, key, updates[key])
 
     try:
         db.session.commit()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter
@@ -20,8 +21,11 @@ from rag_healthbot_server.services.agents.embeddings_agent import (
     IInputData as EmbeddingsInputData,
     run_embeddings_agent,
 )
+from rag_healthbot_server.services.agents.common.contracts import AgentType
 
 import uuid
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -136,11 +140,13 @@ def post_conversation_from_report(payload: CreateConversationFromReportRequest):
             run_embeddings_agent(
                 IEmbeddingsAgentInput(
                     rund_id=str(uuid.uuid4()),
+                    agent_type=AgentType.REPORT_EMBEDDING,
                     input=EmbeddingsInputData(texts=[extracted_text]),
                     constraints={"report_id": report_id},
                 )
             )
-    except Exception:
+    except Exception as e:
+        logger.exception("Embedding generation failed for report_id=%s", report_id)
         return JSONResponse(status_code=500, content={"error": "server"})
 
     try:
@@ -152,7 +158,8 @@ def post_conversation_from_report(payload: CreateConversationFromReportRequest):
             )
         )
         return CreateConversationFromReportResponse(id=str(conv.id))
-    except Exception:
+    except Exception as e:
+        logger.exception("Conversation creation failed for report_id=%s", report_id)
         return JSONResponse(status_code=500, content={"error": "server"})
 
 

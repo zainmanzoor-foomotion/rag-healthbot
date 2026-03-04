@@ -7,6 +7,8 @@ class AgentType(str, Enum):
     OCR = "ocr"
     SUMMARIZATION = "summarization"
     MEDICATION_EXTRACTION = "medication_extraction"
+    MEDICAL_NER = "medical_ner"
+    REPORT_CODING = "report_coding"
     REPORT_EMBEDDING = "report_embedding"
 
 

@@ -14,6 +14,8 @@ type UploadResponse = {
 };
 
 type OrchestratorMedication = {
+    id?: number | null;
+    link_id?: number | null;
     name?: string;
     text?: string;
     dosage?: string | null;
@@ -21,12 +23,42 @@ type OrchestratorMedication = {
     start_date?: string | null;
     end_date?: string | null;
     purpose?: string | null;
+    cui?: string | null;
+    confidence?: number | null;
+    review_status?: string;
+};
+
+type OrchestratorDisease = {
+    id?: number | null;
+    link_id?: number | null;
+    name?: string;
+    cui?: string | null;
+    icd10_code?: string | null;
+    severity?: string | null;
+    status?: string | null;
+    confidence?: number | null;
+    review_status?: string;
+};
+
+type OrchestratorProcedure = {
+    id?: number | null;
+    link_id?: number | null;
+    name?: string;
+    cui?: string | null;
+    cpt_code?: string | null;
+    date_performed?: string | null;
+    body_site?: string | null;
+    outcome?: string | null;
+    confidence?: number | null;
+    review_status?: string;
 };
 
 type OrchestratorOutput = {
     report_id?: number;
     summary?: string;
     medications?: OrchestratorMedication[];
+    diseases?: OrchestratorDisease[];
+    procedures?: OrchestratorProcedure[];
 };
 
 type OrchestratorResult = {
@@ -43,6 +75,10 @@ type JobStatusResponse = {
     error?: string | null;
 };
 
+const DEFAULT_POLL_TIMEOUT_MS = Number(
+    process.env.RAG_HEALTHBOT_POLL_TIMEOUT_MS ?? 600_000
+);
+
 function getServerBaseUrl() {
     // Should point to the FastAPI base, including /api
     // Example: http://localhost:8000/api
@@ -53,7 +89,11 @@ function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function pollJob(baseUrl: string, jobId: string, timeoutMs = 120_000) {
+async function pollJob(
+    baseUrl: string,
+    jobId: string,
+    timeoutMs = DEFAULT_POLL_TIMEOUT_MS
+) {
     const started = Date.now();
     while (true) {
         const res = await fetch(`${baseUrl}/report/jobs/${jobId}`);
@@ -132,24 +172,56 @@ export async function POST(req: Request) {
             const reportId = output?.report_id;
             const summary = output?.summary ?? "";
             const medsRaw = output?.medications ?? [];
+            const diseasesRaw = output?.diseases ?? [];
+            const proceduresRaw = output?.procedures ?? [];
 
             return {
                 reportId: reportId != null ? String(reportId) : undefined,
                 filename: file_name,
                 summary,
-                medications: medsRaw.map((m) => ({
+                medications: medsRaw.map((m: any) => ({
+                    id: m.id ?? null,
+                    link_id: m.link_id ?? null,
                     name: String(m.name ?? m.text ?? ""),
                     purpose: String(m.purpose ?? ""),
+                    cui: m.cui ?? null,
+                    confidence: m.confidence ?? null,
+                    review_status: m.review_status ?? "pending_review",
+                    is_drug_class: m.is_drug_class ?? false,
+                })),
+                diseases: diseasesRaw.map((d: any) => ({
+                    id: d.id ?? null,
+                    link_id: d.link_id ?? null,
+                    name: String(d.name ?? ""),
+                    cui: d.cui ?? null,
+                    icd10_code: d.icd10_code ?? null,
+                    severity: d.severity ?? null,
+                    status: d.status ?? null,
+                    confidence: d.confidence ?? null,
+                    review_status: d.review_status ?? "pending_review",
+                })),
+                procedures: proceduresRaw.map((p: any) => ({
+                    id: p.id ?? null,
+                    link_id: p.link_id ?? null,
+                    name: String(p.name ?? ""),
+                    cui: p.cui ?? null,
+                    cpt_code: p.cpt_code ?? null,
+                    date_performed: p.date_performed ?? null,
+                    body_site: p.body_site ?? null,
+                    outcome: p.outcome ?? null,
+                    confidence: p.confidence ?? null,
+                    review_status: p.review_status ?? "pending_review",
                 })),
             };
         });
 
         return NextResponse.json({ summaries });
     } catch (err) {
-        console.error(err);
+        const message = err instanceof Error ? err.message : "Failed to summarize reports";
+        console.error("/api/report failed:", err);
         return NextResponse.json(
-            { error: "Failed to summarize reports" },
-            { status: 500 }
+            { error: message },
+            { status: 502 }
         );
     }
 }

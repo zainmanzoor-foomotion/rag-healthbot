@@ -34,3 +34,5 @@ class Report(Base):
         DateTime, nullable=False, default=datetime.now(), onupdate=datetime.now()
     )
     medications = relationship("ReportMedication", back_populates="report")
+    diseases = relationship("ReportDisease", back_populates="report")
+    procedures = relationship("ReportProcedure", back_populates="report")

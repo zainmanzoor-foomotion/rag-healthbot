@@ -21,8 +21,12 @@ if config.config_file_name is not None:
 
 from rag_healthbot_server.db import Base
 from rag_healthbot_server.Models.Medication import Medication
+from rag_healthbot_server.Models.Disease import Disease
+from rag_healthbot_server.Models.Procedure import Procedure
 from rag_healthbot_server.Models.Report import Report
 from rag_healthbot_server.Models.ReportMedication import ReportMedication
+from rag_healthbot_server.Models.ReportDisease import ReportDisease
+from rag_healthbot_server.Models.ReportProcedure import ReportProcedure
 from rag_healthbot_server.Models.ReportEmbedding import ReportEmbedding
 from rag_healthbot_server.Models.Conversation import Conversation
 

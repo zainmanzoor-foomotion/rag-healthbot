@@ -1,7 +1,7 @@
 [project]
 name = "rag-healthbot-server"
 version = "0.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "alembic>=1.18.1",
     "asyncpg>=0.31.0",
@@ -22,12 +22,15 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "redis>=7.1.0",
     "rq>=2.6.1",
+    "spacy>=3.8.0",
     "sqlalchemy>=2.0.45",
     "uvicorn>=0.40.0",
 ]
 
 [project.scripts]
 server = "rag_healthbot_server.cli:main"
+backfill-codes = "rag_healthbot_server.cli:backfill"
+index-codes = "rag_healthbot_server.utilities.index_codes:index_codes_cli"
 
 [build-system]
 requires = ["uv_build>=0.9.9,<0.10.0"]

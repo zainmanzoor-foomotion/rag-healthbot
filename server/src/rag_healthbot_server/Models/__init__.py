@@ -1,5 +1,10 @@
 from .Medication import Medication  # noqa: F401
+from .Disease import Disease  # noqa: F401
+from .Procedure import Procedure  # noqa: F401
 from .Report import Report  # noqa: F401
 from .ReportMedication import ReportMedication  # noqa: F401
+from .ReportDisease import ReportDisease  # noqa: F401
+from .ReportProcedure import ReportProcedure  # noqa: F401
 from .ReportEmbedding import ReportEmbedding  # noqa: F401
+from .CodeEmbedding import CodeEmbedding  # noqa: F401
 from .Conversation import Conversation  # noqa: F401

@@ -70,6 +70,9 @@ const LandingPage: React.FC = () => {
     });
 
     setFiles((prev) => [...prev, ...newFiles]);
+    // Reset native input so the same file can be selected again without
+    // the browser suppressing the change event.
+    e.target.value = "";
   };
 
   const removeFile = (index: number) => {
@@ -97,7 +100,15 @@ const LandingPage: React.FC = () => {
       setFiles([]);
     } catch (err) {
       console.error(err);
-      toast.error("Upload failed.");
+      if (axios.isAxiosError(err)) {
+        const message =
+          (err.response?.data as { error?: string } | undefined)?.error ||
+          err.message ||
+          "Upload failed.";
+        toast.error(message);
+      } else {
+        toast.error("Upload failed.");
+      }
     } finally {
       setIsUploading(false);
     }

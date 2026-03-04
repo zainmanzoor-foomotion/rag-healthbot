@@ -10,7 +10,7 @@ import coloredlogs
 from rag_healthbot_server.config import settings
 
 from rag_healthbot_server.utilities.report_persistence import (
-    save_report_and_medications,
+    save_report_entities_fast,
 )
 
 from .ocr_agent import (
@@ -32,8 +32,16 @@ from .embeddings_agent import (
     IEmbeddingsAgentInput,
     IInputData as IEmbeddingsInputData,
 )
+from .report_coding_agent import (
+    IReportCodingAgentInput,
+    IInputData as IReportCodingInputData,
+)
 
-from rag_healthbot_server.services.agents.common.entities import MedicationEntity
+from rag_healthbot_server.services.agents.common.entities import (
+    MedicationEntity,
+    DiseaseEntity,
+    ProcedureEntity,
+)
 from rag_healthbot_server.utilities.hashing import (
     report_content_hash,
     extracted_text_hash,
@@ -44,6 +52,8 @@ from rag_healthbot_server.utilities.medication_normalization import (
 )
 from rag_healthbot_server.utilities.report_utils import (
     report_to_medication_entities,
+    report_to_disease_entities,
+    report_to_procedure_entities,
 )
 from rag_healthbot_server.utilities.report_dedup import find_existing_report
 
@@ -69,12 +79,15 @@ class IInputData(BaseModel):
     file_content: str
     mime_type: str
     file_name: str
+    report_date: str | None = None
 
 
 class IOutputData(BaseModel):
     report_id: int
     summary: str
     medications: list[MedicationEntity]
+    diseases: list[DiseaseEntity] = []
+    procedures: list[ProcedureEntity] = []
 
 
 class ISummaryOrchestratorInput(IAgentInput):
@@ -115,6 +128,8 @@ def _maybe_return_duplicate_report(
             report_id=existing.id,
             summary=existing.summary,
             medications=report_to_medication_entities(existing),
+            diseases=report_to_disease_entities(existing),
+            procedures=report_to_procedure_entities(existing),
         ),
     )
 
@@ -127,9 +142,10 @@ def run_summary_orchestrator(
       1. OCR agent        → extracted text
       2. Summarizer agent → summary         (parallel-safe, but sequential here)
       3. Entity extractor → medications
-      4. DB persist
-      5. Enqueue embeddings agent (async, fire-and-forget)
-      6. Return {report_id, summary, medications}
+    4. Fast DB persist (no coding)
+    5. Enqueue report coding agent (async)
+    6. Enqueue embeddings agent (async, fire-and-forget)
+    7. Return {report_id, summary, medications}
     """
     job = cast(Job, get_current_job())
     start_time = time.time()
@@ -137,12 +153,13 @@ def run_summary_orchestrator(
     file_content = payload.input.file_content
     mime_type = payload.input.mime_type
     file_name = payload.input.file_name
+    report_date = payload.input.report_date
 
     content_hash = report_content_hash(file_content)
 
     # ── Distributed lock (prevent duplicate processing) ─────────
     lock_key = _lock_key(content_hash or file_name)
-    got = redis.set(lock_key, job.get_id(), nx=True, ex=60 * 10)
+    got = redis.set(lock_key, job.id, nx=True, ex=60 * 10)
     if not got:
         logger.info(f"Report processing already in progress for {file_name}")
         return ISummaryOrchestratorOutput(
@@ -230,25 +247,60 @@ def run_summary_orchestrator(
             )
 
         medications = normalize_and_dedupe_medications(entity_result.output.medications)
+        diseases = (
+            entity_result.output.diseases
+            if hasattr(entity_result.output, "diseases")
+            else []
+        )
+        procedures = (
+            entity_result.output.procedures
+            if hasattr(entity_result.output, "procedures")
+            else []
+        )
         logger.info(
-            f"Entity extractor completed — found {len(medications)} medications"
+            "Entity extractor completed — found %d medications, %d diseases, %d procedures",
+            len(medications),
+            len(diseases),
+            len(procedures),
         )
 
         job.meta["stage"] = "db_persist:started"
         job.save_meta()
 
-        report_id = save_report_and_medications(
+        report_id = save_report_entities_fast(
             file_name=file_name,
             extracted_text=extracted_text,
             summary=summary,
             content_hash=content_hash,
             extracted_text_hash=extracted_text_hash_value,
+            report_date=report_date,
             medications=medications,
+            diseases=diseases,
+            procedures=procedures,
         )
 
         logger.info(
-            f"Persisted report id={report_id} with {len(medications)} medications"
+            "Persisted report id=%d with %d medications, %d diseases, %d procedures",
+            report_id,
+            len(medications),
+            len(diseases),
+            len(procedures),
         )
+
+        job.meta["stage"] = "coding:enqueued"
+        job.save_meta()
+
+        queue.enqueue(
+            "rag_healthbot_server.services.agents.report_coding_agent.run_report_coding_agent",
+            IReportCodingAgentInput(
+                rund_id=payload.rund_id,
+                agent_type=AgentType.REPORT_CODING,
+                input=IReportCodingInputData(report_id=report_id),
+            ),
+            job_timeout=10 * 60,
+        )
+
+        logger.info("Enqueued report coding job for report id=%d", report_id)
 
         job.meta["stage"] = "embeddings:enqueued"
         job.save_meta()
@@ -278,6 +330,8 @@ def run_summary_orchestrator(
                 report_id=report_id,
                 summary=summary,
                 medications=medications,
+                diseases=diseases,
+                procedures=procedures,
             ),
         )
 

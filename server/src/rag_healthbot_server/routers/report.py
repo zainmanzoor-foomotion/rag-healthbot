@@ -43,6 +43,7 @@ class ReportUploadItem(BaseModel):
     file_name: str
     mime_type: str
     file_content: str  # base64 string
+    report_date: str | None = None
 
 
 class UploadRequest(BaseModel):
@@ -50,10 +51,41 @@ class UploadRequest(BaseModel):
 
 
 class MedicationOut(BaseModel):
+    id: int | None = None  # canonical medication entity id
+    link_id: int | None = None  # report_medication join row id (review handle)
     text: str
     dosage: str | None = None
     frequency: str | None = None
     purpose: str | None = None
+    cui: str | None = None
+    confidence: float | None = None
+    review_status: str = "pending_review"
+    is_drug_class: bool = False
+
+
+class DiseaseOut(BaseModel):
+    id: int | None = None  # canonical disease entity id
+    link_id: int | None = None  # report_disease join row id (review handle)
+    name: str
+    cui: str | None = None
+    icd10_code: str | None = None
+    severity: str | None = None
+    status: str | None = None
+    confidence: float | None = None
+    review_status: str = "pending_review"
+
+
+class ProcedureOut(BaseModel):
+    id: int | None = None  # canonical procedure entity id
+    link_id: int | None = None  # report_procedure join row id (review handle)
+    name: str
+    cui: str | None = None
+    cpt_code: str | None = None
+    date_performed: str | None = None
+    body_site: str | None = None
+    outcome: str | None = None
+    confidence: float | None = None
+    review_status: str = "pending_review"
 
 
 class JobStatusResponse(BaseModel):
@@ -70,6 +102,8 @@ class ReportOut(BaseModel):
     summary: str
     extracted_text: str | None = None
     medications: list[MedicationOut] = []
+    diseases: list[DiseaseOut] = []
+    procedures: list[ProcedureOut] = []
 
     class Config:
         from_attributes = True
@@ -94,6 +128,7 @@ async def upload_reports(payload: UploadRequest):
         mime_type = file.mime_type
         file_name = file.file_name
         file_content = file.file_content
+        report_date = file.report_date
 
         run_id = uuid.uuid4()
 
@@ -104,6 +139,7 @@ async def upload_reports(payload: UploadRequest):
                 file_content=file_content,
                 mime_type=mime_type,
                 file_name=file_name,
+                report_date=report_date,
             ),
         )
 
@@ -113,8 +149,8 @@ async def upload_reports(payload: UploadRequest):
             job_timeout=10 * 60,
         )
 
-        logger.info(f"Enqueued summary job {rq_job.get_id()} for {file_name}")
-        jobs.append(JobEnqueued(job_id=rq_job.get_id(), file_name=file_name))
+        logger.info(f"Enqueued summary job {rq_job.id} for {file_name}")
+        jobs.append(JobEnqueued(job_id=rq_job.id, file_name=file_name))
 
     return UploadResponse(jobs=jobs)
 
@@ -170,10 +206,54 @@ def get_reports():
             med = link.medication
             meds.append(
                 MedicationOut(
+                    id=med.id if med else None,
+                    link_id=link.id,
                     text=med.name if med else "Unknown",
                     dosage=link.dosage,
                     frequency=link.frequency,
                     purpose=link.purpose,
+                    cui=getattr(med, "cui", None) if med else None,
+                    confidence=getattr(link, "coding_confidence", None),
+                    review_status=(getattr(link, "review_status", "pending_review")),
+                    is_drug_class=(
+                        bool(getattr(med, "is_drug_class", False)) if med else False
+                    ),
+                )
+            )
+        diseases = []
+        for link in getattr(r, "diseases", []) or []:
+            dis = link.disease
+            diseases.append(
+                DiseaseOut(
+                    id=dis.id if dis else None,
+                    link_id=link.id,
+                    name=dis.name if dis else "Unknown",
+                    cui=getattr(dis, "cui", None) if dis else None,
+                    icd10_code=getattr(dis, "icd10_code", None) if dis else None,
+                    severity=link.severity,
+                    status=link.status,
+                    confidence=getattr(link, "coding_confidence", None),
+                    review_status=(getattr(link, "review_status", "pending_review")),
+                )
+            )
+        procedures = []
+        for link in getattr(r, "procedures", []) or []:
+            proc = link.procedure
+            date_performed = getattr(link, "date_performed", None)
+            procedures.append(
+                ProcedureOut(
+                    id=proc.id if proc else None,
+                    link_id=link.id,
+                    name=proc.name if proc else "Unknown",
+                    cui=getattr(proc, "cui", None) if proc else None,
+                    cpt_code=getattr(proc, "cpt_code", None) if proc else None,
+                    date_performed=(
+                        date_performed.isoformat() if date_performed else None
+                    ),
+                    body_site=link.body_site,
+                    outcome=link.outcome,
+                    confidence=getattr(link, "coding_confidence", None),
+                    review_status=(getattr(link, "review_status", "pending_review")),
                 )
             )
         out.append(
@@ -183,6 +263,8 @@ def get_reports():
                 summary=r.summary,
                 extracted_text=r.extracted_text,
                 medications=meds,
+                diseases=diseases,
+                procedures=procedures,
             )
         )
     return out
@@ -193,7 +275,7 @@ def get_reports():
 
 @router.get("/{report_id}", response_model=ReportOut)
 def get_report_by_id(report_id: int):
-    """Return a single report with its linked medications."""
+    """Return a single report with its linked medications, diseases, procedures."""
     report = get_report(report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -203,10 +285,54 @@ def get_report_by_id(report_id: int):
         med = link.medication
         meds.append(
             MedicationOut(
+                id=med.id if med else None,
+                link_id=link.id,
                 text=med.name if med else "Unknown",
                 dosage=link.dosage,
                 frequency=link.frequency,
                 purpose=link.purpose,
+                cui=getattr(med, "cui", None) if med else None,
+                confidence=getattr(link, "coding_confidence", None),
+                review_status=(getattr(link, "review_status", "pending_review")),
+                is_drug_class=(
+                    bool(getattr(med, "is_drug_class", False)) if med else False
+                ),
+            )
+        )
+
+    diseases = []
+    for link in getattr(report, "diseases", []) or []:
+        dis = link.disease
+        diseases.append(
+            DiseaseOut(
+                id=dis.id if dis else None,
+                link_id=link.id,
+                name=dis.name if dis else "Unknown",
+                cui=getattr(dis, "cui", None) if dis else None,
+                icd10_code=getattr(dis, "icd10_code", None) if dis else None,
+                severity=link.severity,
+                status=link.status,
+                confidence=getattr(link, "coding_confidence", None),
+                review_status=(getattr(link, "review_status", "pending_review")),
+            )
+        )
+
+    procedures = []
+    for link in getattr(report, "procedures", []) or []:
+        proc = link.procedure
+        date_performed = getattr(link, "date_performed", None)
+        procedures.append(
+            ProcedureOut(
+                id=proc.id if proc else None,
+                link_id=link.id,
+                name=proc.name if proc else "Unknown",
+                cui=getattr(proc, "cui", None) if proc else None,
+                cpt_code=getattr(proc, "cpt_code", None) if proc else None,
+                date_performed=date_performed.isoformat() if date_performed else None,
+                body_site=link.body_site,
+                outcome=link.outcome,
+                confidence=getattr(link, "coding_confidence", None),
+                review_status=(getattr(link, "review_status", "pending_review")),
             )
         )
 
@@ -216,4 +342,6 @@ def get_report_by_id(report_id: int):
         summary=report.summary,
         extracted_text=report.extracted_text,
         medications=meds,
+        diseases=diseases,
+        procedures=procedures,
     )

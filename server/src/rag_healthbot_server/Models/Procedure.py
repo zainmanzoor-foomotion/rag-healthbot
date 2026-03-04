@@ -1,44 +1,37 @@
 from ..db import Base
-from sqlalchemy import Boolean, DateTime, Float, String, Text
+from sqlalchemy import DateTime, Float, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from pydantic import BaseModel
 
 
-class IMedication(BaseModel):
+class IProcedure(BaseModel):
     name: str
     cui: str | None = None
-    rxnorm_code: str | None = None
-    ndc_code: str | None = None
+    cpt_code: str | None = None
     confidence: float | None = None
     review_status: str = "pending_review"
     review_notes: str | None = None
-    is_drug_class: bool = False
+    candidates_json: str | None = None
 
 
-class Medication(Base):
-    __tablename__ = "medication"
+class Procedure(Base):
+    __tablename__ = "procedure"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     name: Mapped[str] = mapped_column(nullable=False, unique=True)
-    cui: Mapped[str | None] = mapped_column(nullable=True, unique=True)
-    rxnorm_code: Mapped[str] = mapped_column(nullable=True, unique=True)
-    ndc_code: Mapped[str] = mapped_column(nullable=True, unique=True)
-
-    # True when this entity is a therapeutic class (e.g. "Analgesics"),
-    # not a specific drug.  These cannot be mapped to a CUI/code automatically.
-    is_drug_class: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
-    )
+    cui: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    cpt_code: Mapped[str | None] = mapped_column(String, nullable=True)
 
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     review_status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default="pending_review"
     )
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    candidates_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    reports = relationship("ReportMedication", back_populates="medication")
+    reports = relationship("ReportProcedure", back_populates="procedure")
     created_at: Mapped[DateTime] = mapped_column(
         DateTime, nullable=False, default=datetime.now
     )

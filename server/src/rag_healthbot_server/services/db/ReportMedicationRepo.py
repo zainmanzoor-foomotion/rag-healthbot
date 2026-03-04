@@ -49,6 +49,33 @@ def delete_report_medication(report_medication_id: int) -> bool:
         raise
 
 
+def get_medications_for_report(report_id: int) -> list[ReportMedication]:
+    stmt = (
+        select(ReportMedication)
+        .where(ReportMedication.report_id == report_id)
+        .order_by(ReportMedication.created_at.desc())
+    )
+    return list(db.session.scalars(stmt).all())
+
+
+def update_report_medication_fields(
+    link_id: int, updates: dict
+) -> ReportMedication | None:
+    """Patch arbitrary columns on a report_medication join row."""
+    link = get_report_medication(link_id)
+    if link is None:
+        return None
+    for key, value in updates.items():
+        setattr(link, key, value)
+    try:
+        db.session.commit()
+        db.session.refresh(link)
+        return link
+    except SQLAlchemyError:
+        db.session.rollback()
+        raise
+
+
 @validate_call
 def update_report_medication(
     report_medication_id: int, data: IReportMedication
